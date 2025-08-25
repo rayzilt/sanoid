@@ -8,7 +8,8 @@
 	- [Debian/Ubuntu](#debianubuntu)
 	- [RHEL/CentOS/AlmaLinux](#RHEL/CentOS/AlmaLinux)
 	- [FreeBSD](#freebsd)
-	- [Alpine Linux / busybox](#alpine-Linux-busybox-based-distributions)
+	- [Alpine Linux / busybox](#alpine-Linux-or-busybox-based-distributions)
+	- [OmniOS](#OmniOS)
 	- [Other OSes](#other-oses)
 - [Configuration](#configuration)
 	- [Sanoid](#sanoid)
@@ -26,9 +27,10 @@ apt install debhelper libcapture-tiny-perl libconfig-inifiles-perl pv lzop mbuff
 
 ```
 
-Clone this repo, build the debian package and install it (alternatively you can skip the package and do it manually like described below for CentOS):
+Clone this repo under /tmp (to make sure the apt user has access to the unpacked clone), build the debian package and install it (alternatively you can skip the package and do it manually like described below for CentOS):
 
 ```bash
+cd /tmp
 git clone https://github.com/jimsalterjrs/sanoid.git
 cd sanoid
 # checkout latest stable release or stay on master for bleeding edge stuff (but expect bugs!)
@@ -59,6 +61,8 @@ sudo yum config-manager --set-enabled powertools
 sudo dnf config-manager --set-enabled powertools
 # On RHEL, instead of PowerTools, we need to enable the CodeReady Builder repo:
 sudo subscription-manager repos --enable=codeready-builder-for-rhel-8-x86_64-rpms
+# For Rocky Linux 9 or AlmaLinux 9 you need the CodeReady Builder repo, and it is labelled `crb`
+sudo dnf config-manager --set-enabled crb
 # Install the packages that Sanoid depends on:
 sudo yum install -y perl-Config-IniFiles perl-Data-Dumper perl-Capture-Tiny perl-Getopt-Long lzop mbuffer mhash pv
 # The repositories above should contain all the relevant Perl modules, but if you
@@ -73,6 +77,7 @@ cpan # answer the questions and paste the following lines:
 Clone this repo, then put the executables and config files into the appropriate directories:
 
 ```bash
+cd /tmp
 # Download the repo as root to avoid changing permissions later
 sudo git clone https://github.com/jimsalterjrs/sanoid.git
 cd sanoid
@@ -171,13 +176,88 @@ pkg install p5-Config-Inifiles p5-Capture-Tiny pv mbuffer lzop sanoid
 
 *   See note about tcsh unpleasantness and other things in FREEBSD.readme
 
-## Alpine Linux / busybox based distributions
+## OmniOS
 
-The busybox implementation of ps is lacking needed arguments so a proper ps program needs to be installed.
-For Alpine Linux this can be done with:
+Used  with OmniOS r34, r36 and r37 (with napp-it installed). Hence, we presume you have a standard perl installation etc.
 
-`apk --no-cache add procps`
+1. Install prerequisites: Perl module Config::IniFiles, ssh, pv, gzip, lzop, and mbuffer
 
+```bash
+# install/update standard programs
+pfexec pkg install openssh gzip mbuffer pipe-viewer
+
+# include OpenCSW repository 
+pfexec pkg set-publisher -G '*' -g https://sfe.opencsw.org/localhostomnios localhostomnios
+	
+# install LZOP (from OpenCSW)
+pfexec pkg install lzop
+	
+# install Perl modules
+pfexec perl -MCPAN -e shell
+	install CPAN			## update CPAN
+	reload cpan			## reload
+
+	install inc::latest		## not sure if required
+	install IO::Scalar		## not sure if required
+	install Config::IniFiles
+	install Capture::Tiny
+	install Data::Dumper		## not sure if required, may be installed already
+	install File::Path		## not sure if required, may be installed already
+	install Getopt::Long		## not sure if required
+	install Pod::Usage		## not sure if required
+	install Time::Local		## not sure if required
+	exit
+```
+
+2. Download and clone the Sanoid repo:
+
+```bash
+# install git
+pfexec pkg install git
+
+# Tip: download the repo as root to avoid changing permissions later
+pfexec git clone https://github.com/jimsalterjrs/sanoid.git
+cd sanoid
+
+# checkout latest stable release or stay on master for bleeding edge stuff (but expect bugs!)
+pfexec git checkout $(git tag | grep "^v" | tail -n 1) 
+
+# patch syncoid, so that it correctly recognises the "zfs resume" capability under OmniOS (see https://github.com/jimsalterjrs/sanoid/issues/554)
+		<< $avail{'sourceresume'} = system("$sourcessh $resumechkcmd $srcpool 2>/dev/null | grep '\\(active\\|enabled\\)' >/dev/null 2>&1");
+		>> $avail{'sourceresume'} = system("$sourcessh $resumechkcmd $srcpool 2>/dev/null | grep -E '^(active|enabled)' >/dev/null 2>&1");
+		<< $avail{'targetresume'} = system("$targetssh $resumechkcmd $dstpool 2>/dev/null | grep '\\(active\\|enabled\\)' >/dev/null 2>&1");
+		>> $avail{'targetresume'} = system("$targetssh $resumechkcmd $dstpool 2>/dev/null | grep -E '^(active|enabled)' >/dev/null 2>&1");
+
+# most likely not required, but make the executables eXecutable
+pfexec chmod +x sanoid syncoid findoid sleepymutex
+
+# Install the executables into /opt/sanoid
+pfexec mkdir /opt/sanoid
+pfexec cp sanoid syncoid findoid sleepymutex /opt/sanoid
+
+# add symbolic links to executables to a directory in $path
+pfexec ln -s /opt/sanoid/sanoid /usr/bin/sanoid & pfexec ln -s /opt/sanoid/syncoid /usr/bin/syncoid & pfexec ln -s /opt/sanoid/findoid /usr/bin/findoid & pfexec ln -s /opt/sanoid/sleepymutex /usr/bin/sleepymutex 
+```	
+
+3. Create the config directory /etc/sanoid,  put default sanoid files there, and create and edit sanoid.conf:
+```bash
+# Create the config directory
+pfexec mkdir /etc/sanoid
+
+# Copy default config and sample config
+pfexec cp sanoid.defaults.conf sanoid.conf /etc/sanoid/sanoid.example.conf
+
+# Create a blank config file
+pfexec touch /etc/sanoid/sanoid.conf
+## and edit it (using e.g. nano as editor):
+pfexec nano /etc/sanoid/sanoid.conf
+```
+
+Further steps (not OmniOS specific): 
+- set up SSH connections between two remote hosts
+- create a cron job that runs sanoid --cron --quiet periodically
+
+=======
 ## MacOS
 
 Install prerequisite software:
@@ -225,9 +305,9 @@ sudo launchctl load /Library/LaunchDaemons/net.openoid.Sanoid.plist
 
 ## Other OSes
 
-**Sanoid** depends on the Perl module Config::IniFiles and will not operate without it. Config::IniFiles may be installed from CPAN, though the project strongly recommends using your distribution's repositories instead.
+**Sanoid** depends on the Perl modules Config::IniFiles and Capture::Tiny and will not operate without them. These modules may be installed from CPAN, though the project strongly recommends using your distribution's repositories instead.
 
-**Syncoid** depends on ssh, pv, gzip, lzop, and mbuffer. It can run with reduced functionality in the absence of any or all of the above. SSH is only required for remote synchronization. On newer FreeBSD and Ubuntu Xenial chacha20-poly1305@openssh.com, on other distributions arcfour crypto is the default for SSH transport since v1.4.6. Syncoid runs will fail if one of them is not available on either end of the transport.
+**Syncoid** depends on ssh, pv, gzip, lzop, and mbuffer as well as sharing sanoid's dependency on Capture::Tiny. Capture::Tiny is mandatory, but syncoid can function with reduced functionality without any or all of the command-line dependencies. SSH is only required for remote synchronization. On newer FreeBSD and Ubuntu Xenial chacha20-poly1305@openssh.com, on other distributions arcfour crypto is the default for SSH transport since v1.4.6. Syncoid runs will fail if one of them is not available on either end of the transport.
 
 ### General outline for installation
 

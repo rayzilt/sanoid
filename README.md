@@ -80,10 +80,6 @@ For more full details on sanoid.conf settings see [Wiki page](https://github.com
 
 	This will process your sanoid.conf file, it will NOT create snapshots, but it will purge expired ones.
 
-+ --force-prune
-
-	Purges expired snapshots even if a send/recv is in progress
-
 + --monitor-snapshots
 
 	This option is designed to be run by a Nagios monitoring system. It reports on the health of your snapshots.
@@ -99,6 +95,10 @@ For more full details on sanoid.conf settings see [Wiki page](https://github.com
 + --force-update
 
 	This clears out sanoid's zfs snapshot listing cache. This is normally not needed.
+
++ --cache-ttl=SECONDS
+
+	Set custom cache expire time in seconds (default: 20 minutes).
 
 + --version
 
@@ -126,7 +126,9 @@ For more full details on sanoid.conf settings see [Wiki page](https://github.com
 
 ### Sanoid script hooks
 
-There are three script types which can optionally be executed at various stages in the lifecycle of a snapshot:
+There are three script types which can optionally be executed at various stages in the lifecycle of a snapshot.
+
+**Note** that snapshots related script are triggered only if you have `autosnap = yes` and pruning scripts are triggered only if you have `autoprune = yes`.
 
 #### `pre_snapshot_script`
 
@@ -328,6 +330,7 @@ As of 1.4.18, syncoid also automatically supports and enables resume of interrup
 	This argument tells syncoid to create a zfs bookmark for the newest snapshot after it got replicated successfully. The bookmark name will be equal to the snapshot name. Only works in combination with the --no-sync-snap option. This can be very useful for irregular replication where the last matching snapshot on the source was already deleted but the bookmark remains so a replication is still possible.
 
 + --use-hold
+
 	This argument tells syncoid to add a hold to the newest snapshot on the source and target after replication succeeds and to remove the hold after the next successful replication. Setting a hold prevents the snapshots from being destroyed. The hold name includes the identifier if set. This allows for separate holds in case of replication to multiple targets.
 
 + --preserve-recordsize
